@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plagiarism Detector — Pattern Matching & Automata</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,400&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:      #0d0f14;
+    --surface: #13161e;
+    --card:    #181c28;
+    --border:  #232840;
+    --accent:  #4f8ef7;
+    --green:   #00d4a0;
+    --red:     #f76f4f;
+    --yellow:  #fbbf24;
+    --purple:  #a78bfa;
+    --text:    #e8ecf4;
+    --muted:   #7a8299;
+    --radius:  10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 10;
+  }
+  header .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 15px; font-weight: 700;
+    color: var(--accent); letter-spacing: .04em;
+  }
+  header .sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 11px; border-radius: 20px; font-size: 11px;
+    font-family: 'Space Mono', monospace;
+  }
+  .pill-blue { background: #1a2840; color: var(--accent); }
+  .pill-green { background: #0d2620; color: var(--green); }
+
+  /* ── Layout ── */
+  main {
+    max-width: 1200px; margin: 0 auto;
+    padding: 24px 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 18px;
+  }
+  @media(max-width: 820px) { main { grid-template-columns: 1fr; } }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .card-head {
+    background: var(--surface);
+    padding: 10px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px; letter-spacing: .1em;
+    color: var(--text); font-weight: 700;
+  }
+  .card-body { padding: 14px 16px; }
+
+  /* ── Text areas ── */
+  textarea {
+    width: 100%; height: 180px; resize: vertical;
+    background: #0d0f14; color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    line-height: 1.7; outline: none;
+    transition: border-color .2s;
+  }
+  textarea:focus { border-color: var(--accent); }
+  textarea::placeholder { color: var(--muted); }
+
+  /* ── Buttons ── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 18px; border-radius: 7px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all .15s; border: 1px solid transparent;
+  }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { opacity: .85; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-ghost { background: transparent; color: var(--muted); border-color: var(--border); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-file {
+    font-size: 11px; font-family: 'Space Mono', monospace;
+    background: transparent; color: var(--accent); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 5px; cursor: pointer;
+  }
+  .btn-file:hover { border-color: var(--accent); }
+
+  /* ── Action bar ── */
+  .action-bar {
+    grid-column: 1 / -1;
+    display: flex; gap: 10px; align-items: center;
+  }
+
+  /* ── Score panel ── */
+  .score-panel {
+    grid-column: 1 / -1;
+    display: none;
+    grid-template-columns: 240px 1fr;
+    gap: 18px;
+  }
+  .score-panel.visible { display: grid; }
+
+  .composite-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .composite-label { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .12em; color: var(--muted); margin-bottom: 8px; }
+  .composite-value { font-family: 'Space Mono', monospace; font-size: 44px; font-weight: 700; line-height: 1; }
+  .composite-verdict { font-size: 13px; font-weight: 500; margin-top: 8px; }
+
+  /* ── Algorithm grid ── */
+  .algo-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  }
+  .algo-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .algo-name {
+    font-family: 'Space Mono', monospace; font-size: 10px;
+    letter-spacing: .1em; color: var(--muted); margin-bottom: 6px;
+  }
+  .algo-score {
+    font-family: 'Space Mono', monospace; font-size: 20px;
+    font-weight: 700; color: var(--text);
+  }
+  .algo-bar-wrap {
+    background: #1e2230; border-radius: 3px; height: 5px;
+    overflow: hidden; margin-top: 8px;
+  }
+  .algo-bar { height: 100%; border-radius: 3px; transition: width 1s ease; width: 0; }
+
+  /* ── Results panel ── */
+  .results-panel {
+    grid-column: 1 / -1;
+    display: none;
+  }
+  .results-panel.visible { display: block; }
+
+  /* ── Tabs ── */
+  .tab-bar {
+    display: flex; gap: 4px; margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .tab {
+    padding: 6px 14px; border-radius: 6px; font-size: 12px;
+    font-family: 'Space Mono', monospace; cursor: pointer;
+    color: var(--muted); border: 1px solid transparent;
+    transition: all .15s;
+  }
+  .tab.active { background: var(--card); border-color: var(--border); color: var(--text); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ── Match list ── */
+  .match-list { display: flex; flex-direction: column; gap: 8px; }
+  .match-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 7px; padding: 10px 14px;
+  }
+  .match-phrase {
+    font-family: 'Space Mono', monospace; font-size: 12px;
+    color: var(--green); margin-bottom: 4px;
+  }
+  .match-meta { font-size: 11px; color: var(--muted); }
+  .empty-msg { color: var(--muted); font-size: 13px; padding: 14px 0; }
+
+  /* ── N-gram table ── */
+  .ngram-table { width: 100%; border-collapse: collapse; }
+  .ngram-table th {
+    text-align: left; padding: 8px 12px;
+    font-family: 'Space Mono', monospace; font-size: 10px;
+    letter-spacing: .08em; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+  }
+  .ngram-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .ngram-table tr:last-child td { border-bottom: none; }
+
+  /* ── Spinner ── */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(79,142,247,.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Utility ── */
+  input[type=file] { display: none; }
+  .mono { font-family: 'Space Mono', monospace; }
+  .tag { font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: .08em; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">PLAGIARISM DETECTOR</div>
+    <div class="sub">Pattern Matching · Automata Theory · KMP · Rabin-Karp · Aho-Corasick</div>
+  </div>
+  <div style="display:flex;gap:8px">
+    <span class="pill pill-blue">5 Algorithms</span>
+    <span class="pill pill-green" id="statusPill">● Ready</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Document 1 -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">DOCUMENT 1</span>
+      <label class="btn-file" for="file1input">Open File</label>
+      <input type="file" id="file1input" accept=".txt">
+    </div>
+    <div class="card-body">
+      <textarea id="doc1" placeholder="Paste or load document 1..."></textarea>
+    </div>
+  </div>
+
+  <!-- Document 2 -->
+  <div class="card">
+    <div class="card-head">
+      <span class="card-title">DOCUMENT 2</span>
+      <label class="btn-file" for="file2input">Open File</label>
+      <input type="file" id="file2input" accept=".txt">
+    </div>
+    <div class="card-body">
+      <textarea id="doc2" placeholder="Paste or load document 2..."></textarea>
+    </div>
+  </div>
+
+  <!-- Action bar -->
+  <div class="action-bar">
+    <button class="btn btn-primary" id="runBtn" onclick="runAnalysis()">
+      <span>▶</span><span>Run Analysis</span>
+    </button>
+    <button class="btn btn-ghost" onclick="clearAll()">✕ Clear</button>
+    <div id="spinner" class="spinner" style="display:none"></div>
+    <span id="statusMsg" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+
+  <!-- Score panel -->
+  <div class="score-panel" id="scorePanel">
+    <div class="composite-box">
+      <div class="composite-label">COMPOSITE SCORE</div>
+      <div class="composite-value" id="compositeVal">—</div>
+      <div class="composite-verdict" id="compositeVerdict"></div>
+    </div>
+    <div class="algo-grid" id="algoGrid"></div>
+  </div>
+
+  <!-- Results tabs -->
+  <div class="results-panel card" id="resultsPanel">
+    <div class="card-head">
+      <span class="card-title">DETAILED RESULTS</span>
+    </div>
+    <div class="card-body">
+      <div class="tab-bar" id="tabBar"></div>
+      <div id="tabContents"></div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ── File loaders ────────────────────────────────────────────────────────
+document.getElementById('file1input').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => document.getElementById('doc1').value = ev.target.result;
+  r.readAsText(f);
+});
+document.getElementById('file2input').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => document.getElementById('doc2').value = ev.target.result;
+  r.readAsText(f);
+});
+
+// ── Pure-JS backend (no Flask needed for demo) ─────────────────────────
+
+function preprocess(text) {
+  return text.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+}
+function tokenize(text) { return text.split(' ').filter(Boolean); }
+
+// Rabin-Karp
+function rabinKarp(text, pattern) {
+  const BASE = 256, MOD = 101;
+  const n = text.length, m = pattern.length;
+  if (m > n) return [];
+  const matches = [];
+  let ph = 0, th = 0, h = 1;
+  for (let i = 0; i < m - 1; i++) h = (h * BASE) % MOD;
+  for (let i = 0; i < m; i++) {
+    ph = (BASE * ph + pattern.charCodeAt(i)) % MOD;
+    th = (BASE * th + text.charCodeAt(i)) % MOD;
+  }
+  for (let i = 0; i <= n - m; i++) {
+    if (ph === th && text.slice(i, i + m) === pattern) matches.push(i);
+    if (i < n - m) {
+      th = (BASE * (th - text.charCodeAt(i) * h) + text.charCodeAt(i + m)) % MOD;
+      if (th < 0) th += MOD;
+    }
+  }
+  return matches;
+}
+
+// KMP
+function buildLPS(p) {
+  const lps = new Array(p.length).fill(0);
+  let len = 0, i = 1;
+  while (i < p.length) {
+    if (p[i] === p[len]) { lps[i++] = ++len; }
+    else if (len) { len = lps[len - 1]; }
+    else { lps[i++] = 0; }
+  }
+  return lps;
+}
+function kmpSearch(text, pattern) {
+  const lps = buildLPS(pattern);
+  const matches = [];
+  let i = 0, j = 0;
+  while (i < text.length) {
+    if (text[i] === pattern[j]) { i++; j++; }
+    if (j === pattern.length) { matches.push(i - j); j = lps[j - 1]; }
+    else if (i < text.length && text[i] !== pattern[j]) {
+      if (j) j = lps[j - 1]; else i++;
+    }
+  }
+  return matches;
+}
+
+// N-gram
+function ngrams(tokens, n) {
+  const out = [];
+  for (let i = 0; i <= tokens.length - n; i++) out.push(tokens.slice(i, i + n).join(' '));
+  return out;
+}
+function jaccard(a, b) {
+  const sa = new Set(a), sb = new Set(b);
+  const inter = [...sa].filter(x => sb.has(x)).length;
+  const union = new Set([...a, ...b]).size;
+  return union ? inter / union : 0;
+}
+
+// Aho-Corasick (simplified)
+function ahoCorasick(patterns, text) {
+  const matches = [];
+  patterns.forEach(p => { if (text.includes(p)) matches.push(p); });
+  return [...new Set(matches)];
+}
+
+// Phrase extraction helper
+function extractPhrases(tokens, len) {
+  const out = new Set();
+  for (let i = 0; i <= tokens.length - len; i++) out.add(tokens.slice(i, i + len).join(' '));
+  return [...out];
+}
+
+function findMatches(t1, t2, searchFn, minWords = 4) {
+  const words = tokenize(t1);
+  const results = [];
+  for (let len = minWords; len <= Math.min(9, words.length); len++) {
+    for (let i = 0; i <= words.length - len; i++) {
+      const phrase = words.slice(i, i + len).join(' ');
+      const pos = searchFn(t2, phrase);
+      if (pos.length) results.push({ phrase, positions: pos, len });
+    }
+  }
+  results.sort((a, b) => b.len - a.len);
+  const unique = [];
+  for (const r of results)
+    if (!unique.some(u => u.phrase.includes(r.phrase) || r.phrase.includes(u.phrase)))
+      unique.push(r);
+  return unique.slice(0, 20);
+}
+
+function coverageScore(matches, text2) {
+  if (!matches.length) return 0;
+  const covered = new Set();
+  matches.forEach(m => m.positions.forEach(p => { for (let i = p; i < p + m.phrase.length; i++) covered.add(i); }));
+  return Math.min((covered.size / Math.max(text2.length, 1)) * 100, 100);
+}
+
+// ── Main analysis ────────────────────────────────────────────────────
+function runAnalysis() {
+  const raw1 = document.getElementById('doc1').value.trim();
+  const raw2 = document.getElementById('doc2').value.trim();
+  if (!raw1 || !raw2) { alert('Please enter or load both documents.'); return; }
+
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('spinner').style.display = 'block';
+  document.getElementById('statusMsg').textContent = 'Analysing…';
+
+  setTimeout(() => {
+    const t1 = preprocess(raw1), t2 = preprocess(raw2);
+    const tok1 = tokenize(t1), tok2 = tokenize(t2);
+
+    const rkMatches  = findMatches(t1, t2, (txt, pat) => rabinKarp(txt, pat));
+    const kmpMatches = findMatches(t1, t2, (txt, pat) => kmpSearch(txt, pat));
+
+    const ngramRes = {};
+    [1,2,3,4,5].forEach(n => {
+      const g1 = ngrams(tok1, n), g2 = ngrams(tok2, n);
+      const score = jaccard(g1, g2);
+      const common = g1.filter(g => g2.includes(g));
+      ngramRes[n] = { score: +(score * 100).toFixed(2), common: [...new Set(common)],
+                      total1: g1.length, total2: g2.length };
+    });
+
+    const acPhrases = extractPhrases(tok1, 4);
+    const acMatches = ahoCorasick(acPhrases, t2);
+    const acScore   = +((acMatches.length / Math.max(acPhrases.length, 1)) * 100).toFixed(2);
+
+    const rkScore  = +coverageScore(rkMatches, t2).toFixed(2);
+    const kmpScore = +coverageScore(kmpMatches, t2).toFixed(2);
+    const ngScore  = ngramRes[3].score;
+
+    const composite = +(0.25*rkScore + 0.25*kmpScore + 0.30*ngScore + 0.20*acScore).toFixed(2);
+    const verdict = composite >= 50 ? 'High Plagiarism' : composite >= 25 ? 'Moderate Overlap' : 'Low Similarity';
+    const color   = composite >= 50 ? 'var(--red)' : composite >= 25 ? 'var(--yellow)' : 'var(--green)';
+
+    showResults({ composite, verdict, color, rkMatches, rkScore, kmpMatches, kmpScore, ngramRes, ngScore, acMatches, acScore });
+
+    document.getElementById('runBtn').disabled = false;
+    document.getElementById('spinner').style.display = 'none';
+    document.getElementById('statusMsg').textContent = 'Complete';
+  }, 60);
+}
+
+function showResults(r) {
+  // Composite
+  document.getElementById('compositeVal').textContent = r.composite.toFixed(1) + '%';
+  document.getElementById('compositeVal').style.color = r.color;
+  document.getElementById('compositeVerdict').textContent = r.verdict;
+  document.getElementById('compositeVerdict').style.color = r.color;
+  document.getElementById('scorePanel').classList.add('visible');
+
+  // Algo cards
+  const algos = [
+    { name:'RABIN-KARP', score: r.rkScore,  color:'var(--accent)' },
+    { name:'KMP',        score: r.kmpScore, color:'var(--purple)' },
+    { name:'N-GRAM (3)', score: r.ngScore,  color:'var(--yellow)' },
+    { name:'AHO-CORASICK', score: r.acScore, color:'var(--green)' },
+  ];
+  document.getElementById('algoGrid').innerHTML = algos.map(a => `
+    <div class="algo-card">
+      <div class="algo-name">${a.name}</div>
+      <div class="algo-score" style="color:${a.color}">${a.score.toFixed(1)}%</div>
+      <div class="algo-bar-wrap"><div class="algo-bar" id="bar-${a.name.replace(/[^A-Z]/g,'')}" style="background:${a.color}"></div></div>
+    </div>`).join('');
+  requestAnimationFrame(() => {
+    algos.forEach(a => {
+      const el = document.getElementById('bar-' + a.name.replace(/[^A-Z]/g,''));
+      if (el) el.style.width = Math.min(a.score, 100) + '%';
+    });
+  });
+
+  // Tabs
+  const tabs = [
+    { id:'kmp',    label:'KMP Matches' },
+    { id:'rk',     label:'Rabin-Karp' },
+    { id:'ac',     label:'Aho-Corasick' },
+    { id:'ngram',  label:'N-gram Table' },
+  ];
+  document.getElementById('tabBar').innerHTML = tabs.map((t, i) =>
+    `<div class="tab${i===0?' active':''}" onclick="switchTab('${t.id}')" id="tab-${t.id}">${t.label}</div>`).join('');
+
+  document.getElementById('tabContents').innerHTML = `
+    <div class="tab-content active" id="tc-kmp">${matchList(r.kmpMatches, 'KMP')}</div>
+    <div class="tab-content" id="tc-rk">${matchList(r.rkMatches, 'Rabin-Karp')}</div>
+    <div class="tab-content" id="tc-ac">${acList(r.acMatches)}</div>
+    <div class="tab-content" id="tc-ngram">${ngramTable(r.ngramRes)}</div>
+  `;
+  document.getElementById('resultsPanel').classList.add('visible');
+}
+
+function matchList(matches, algo) {
+  if (!matches.length) return '<p class="empty-msg">No significant phrase matches found.</p>';
+  return '<div class="match-list">' + matches.slice(0,12).map(m => `
+    <div class="match-item">
+      <div class="match-phrase">"${m.phrase}"</div>
+      <div class="match-meta">${algo} · ${m.len} words · found at ${m.positions.length} position(s) in Doc2</div>
+    </div>`).join('') + '</div>';
+}
+
+function acList(matches) {
+  if (!matches.length) return '<p class="empty-msg">No multi-pattern matches found.</p>';
+  return '<div class="match-list">' + matches.slice(0,15).map(m => `
+    <div class="match-item">
+      <div class="match-phrase">"${m}"</div>
+      <div class="match-meta">Aho-Corasick · 4-word phrase</div>
+    </div>`).join('') + '</div>';
+}
+
+function ngramTable(ng) {
+  return `<table class="ngram-table">
+    <thead><tr><th>N</th><th>Similarity %</th><th>Common</th><th>Doc1 grams</th><th>Doc2 grams</th></tr></thead>
+    <tbody>${[1,2,3,4,5].map(n => `
+      <tr>
+        <td class="mono">${n}-gram</td>
+        <td><span style="color:${ng[n].score>=50?'var(--red)':ng[n].score>=25?'var(--yellow)':'var(--green)'}">${ng[n].score}%</span></td>
+        <td>${ng[n].common.length}</td>
+        <td>${ng[n].total1}</td>
+        <td>${ng[n].total2}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  document.getElementById('tc-' + id).classList.add('active');
+}
+
+function clearAll() {
+  document.getElementById('doc1').value = '';
+  document.getElementById('doc2').value = '';
+  document.getElementById('scorePanel').classList.remove('visible');
+  document.getElementById('resultsPanel').classList.remove('visible');
+  document.getElementById('statusMsg').textContent = '';
+}
+</script>
+</body>
+</html>
